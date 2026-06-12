@@ -1,0 +1,38 @@
+{
+  "id": "aloha-mujoco",
+  "activation": {
+    "onStartup": true
+  },
+  "enabledByDefault": true,
+  "name": "ALOHA MuJoCo Robot Tools",
+  "description": "OpenClaw tools that run NemoClaw2Robot ALOHA MuJoCo prompt tasks from the sandbox, including queued live-viewer requests.",
+  "contracts": {
+    "tools": [
+      "aloha_mujoco_plan",
+      "aloha_mujoco_run",
+      "aloha_mujoco_live"
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "projectRoot": {
+        "type": "string",
+        "default": "/sandbox/NemoClaw2Robot",
+        "description": "Path to the NemoClaw2Robot runtime inside the OpenClaw sandbox."
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "default": 180000,
+        "description": "Default timeout for ALOHA MuJoCo commands."
+      },
+      "liveViewerUrl": {
+        "type": "string",
+        "default": "http://host.docker.internal:8765",
+        "description": "Optional host-side live MuJoCo viewer bridge URL used when delivery is http."
+      }
+    }
+  }
+}

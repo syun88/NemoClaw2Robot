@@ -1,0 +1,17 @@
+{
+  "name": "@nemoclaw2robot/openclaw-aloha-mujoco",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "description": "OpenClaw tools for prompt-driven ALOHA MuJoCo runs in NemoClaw2Robot.",
+  "openclaw": {
+    "extensions": [
+      "./index.js"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.5.22",
+      "minGatewayVersion": "2026.5.22"
+    }
+  }
+}

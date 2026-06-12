@@ -1,0 +1,13 @@
+robot-aloha-mujoco skillを使ってください。
+
+重要:
+- 日本語で返答してください。
+- 説明だけで止まらず、必ず shell command を実行してください。
+- openclaw.skills[...] は存在しないので使わないでください。
+- cd をJavaScriptとして実行しないでください。
+
+shell commandとして次を実行してください:
+
+cd /sandbox/NemoClaw2Robot && .venv/bin/python -m nemoclaw2robot.cli run --prompt "Alohaのアームロボットでキューブを掴んでください"
+
+実行後、JSON の output_dir、simulated、artifacts の path を日本語で報告してください。
