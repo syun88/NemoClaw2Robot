@@ -1,0 +1,3 @@
+[submodule "NemoClaw"]
+	path = NemoClaw
+	url = https://github.com/NVIDIA/NemoClaw.git
