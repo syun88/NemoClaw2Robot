@@ -7,17 +7,18 @@ The first supported target is the official ALOHA 2 MuJoCo model from Google Deep
 1. Parse the prompt into a robot task.
 2. Load the official ALOHA MJCF model.
 3. Automatically add task objects such as a cube, sphere, target pad, and push lane.
-4. Run a scripted MuJoCo controller for grasp/place/push tasks.
+4. Run a scripted MuJoCo controller for grasp/place/push-style motion demos.
 5. Write task artifacts for inspection.
 6. Optionally show the motion in a live native MuJoCo viewer on the Mac host.
+7. Expose lower-level session tools so an Agent can plan multi-step motions with state, IK, relative moves, gripper commands, object creation, and validation.
 
 `NemoClaw/` and `external/mujoco_menagerie/` are upstream git submodules. They are treated as read-only. This repository adds the robot-specific skill, plugin, scene builder, controller, scripts, and tests outside those submodules.
 
 ## Current Scope
 
-This is a working prototype for Agent-driven MuJoCo scene construction and ALOHA arm control.
+This is a hobby-scope working prototype for Agent-driven MuJoCo scene construction and ALOHA arm control.
 
-The current controller is deterministic and scripted. It opens and closes the official ALOHA gripper joints and moves the arm through approach, pre-grasp, close, lift, place, and push phases. The lift/transfer stage still uses scripted attachment after the close phase, so this is not yet a learned VLA policy or a pure contact-physics grasp.
+The current controller is deterministic and scripted. It opens and closes the official ALOHA gripper joints and moves the arm through approach, pre-grasp, close, object-follow/playback, place-style, and push-style phases. The object motion after gripper close is scripted and should not be described as a verified successful physical grasp. This is not yet a learned VLA policy or a pure contact-physics manipulation controller.
 
 Supported object prompts include cube and sphere:
 
@@ -104,8 +105,20 @@ It also registers the project-side OpenClaw plugin `aloha-mujoco`.
 The plugin exposes these tools to the Agent:
 
 - `aloha_mujoco_plan`: parse a prompt into a normalized task
-- `aloha_mujoco_run`: build the scene, run the scripted controller, and write artifacts
+- `aloha_mujoco_run`: build the scene, run the scripted motion demo, and write artifacts
 - `aloha_mujoco_live`: queue a live-viewer request for host-side visual playback
+- `aloha_prompt_control`: execute a natural-language control prompt through session primitives
+- `aloha_session_start`: create a persistent MuJoCo session for multi-step planning
+- `aloha_get_state`: read gripper poses, object poses, qpos, and contacts
+- `aloha_solve_ik`: solve a target gripper position with the project IK scaffold
+- `aloha_move_relative`: move an arm by a world-frame relative delta or semantic direction
+- `aloha_move_to_pose`: move an arm to a target position
+- `aloha_execute_cartesian_path`: execute multiple gripper waypoints
+- `aloha_set_gripper`: open or close the gripper
+- `aloha_add_object`: add simple cube/sphere/cylinder/paper/marker primitives
+- `aloha_add_trace`: add visual trace segments for drawing/path demos
+- `aloha_check_pose`: verify gripper position
+- `aloha_check_contacts`: inspect MuJoCo contacts
 
 After installation, connect to the sandbox and start the TUI:
 
@@ -131,7 +144,72 @@ Expected behavior:
 2. The Agent calls `aloha_mujoco_run`.
 3. The tool parses the prompt into robot/action/object/hand/target.
 4. The tool generates an ALOHA MuJoCo scene from the official MJCF.
-5. The scripted controller runs, and artifacts are written under `/sandbox/NemoClaw2Robot/artifacts/runs/<timestamp>/`.
+5. The scripted motion demo runs, and artifacts are written under `/sandbox/NemoClaw2Robot/artifacts/runs/<timestamp>/`.
+
+## Agent Planning Mode
+
+For broader commands, the Agent should call `aloha_prompt_control` first instead of relying on the fixed `aloha_mujoco_run` demo. That tool creates a session, converts the natural-language prompt into conservative primitives, executes them, and returns final state. The lower-level session tools remain available for debugging or manual decomposition.
+
+Example user prompts:
+
+```text
+右アームを右に10cm動かしてください
+右アームを上に5cm動かしてからグリッパーを閉じてください
+MuJoCo上に紙を置いて、右アームで簡単な線を描く動作をしてください
+```
+
+Expected planning flow:
+
+1. `aloha_prompt_control` receives the full prompt, for example `右アームを右に10cm動かしてください`.
+2. It creates a persistent session under `artifacts/sessions/<session_id>/`.
+3. It maps the prompt to primitives such as relative move, gripper open/close, object creation, paper placement, and drawing trace.
+4. It executes the primitives through the project IK/session controller.
+5. It returns `session_id`, executed operations, final gripper/object state, and `scene_path`.
+
+Local one-shot example:
+
+```bash
+.venv/bin/python -m nemoclaw2robot.cli prompt-control \
+  --prompt "右アームを右に10cm動かしてください"
+```
+
+Equivalent lower-level local example:
+
+Local example:
+
+```bash
+.venv/bin/python -m nemoclaw2robot.cli session-start \
+  --prompt "Alohaの右アームを右に10cm動かしてください" \
+  --session-id demo
+
+.venv/bin/python -m nemoclaw2robot.cli session-move-relative \
+  --session-id demo \
+  --hand right \
+  --dy -0.10
+
+.venv/bin/python -m nemoclaw2robot.cli session-check-pose \
+  --session-id demo \
+  --hand right
+```
+
+Drawing-style demos are represented as motion plus visual traces, not real ink:
+
+```bash
+.venv/bin/python -m nemoclaw2robot.cli session-add-object \
+  --session-id demo \
+  --name paper \
+  --kind paper \
+  --position 0 -0.3 0.003
+
+.venv/bin/python -m nemoclaw2robot.cli session-cartesian-path \
+  --session-id demo \
+  --hand right \
+  --waypoints-json '[[0,-0.3,0.03],[0.04,-0.3,0.03],[0.04,-0.26,0.03]]'
+
+.venv/bin/python -m nemoclaw2robot.cli session-add-trace \
+  --session-id demo \
+  --points-json '[[0,-0.3,0.01],[0.04,-0.3,0.01],[0.04,-0.26,0.01]]'
+```
 
 ## Real-Time Agent Viewer
 
@@ -172,12 +250,19 @@ Or:
 リアルタイムでAlohaのアームロボットが球体を掴むところを見たい
 ```
 
+Relative/control prompts can also be watched through the same watcher:
+
+```text
+リアルタイムで右アームを右に10cm動かしてください
+```
+
 Expected live flow:
 
 1. The Agent calls `aloha_mujoco_live`.
 2. The tool writes a JSON request under `/sandbox/NemoClaw2Robot/artifacts/live_requests/`.
 3. The Mac host watcher polls that queue through `openshell sandbox exec`.
-4. The host opens the native MuJoCo viewer and plays the generated ALOHA task.
+4. Fixed grasp/place/push prompts play the scripted demo. Relative movement, object, paper, gripper, and drawing prompts use `prompt-control` playback.
+5. The host opens the native MuJoCo viewer and plays the generated ALOHA motion.
 
 The optional direct HTTP bridge is still available for environments that allow sandbox-to-host POST:
 

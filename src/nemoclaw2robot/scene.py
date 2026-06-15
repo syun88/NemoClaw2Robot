@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from xml.etree import ElementTree
 
-from nemoclaw2robot.models import TaskSpec
+from nemoclaw2robot.models import SceneObjectSpec, TaskSpec, TraceSegmentSpec
 from nemoclaw2robot.robots.aloha import (
     DEFAULT_CUBE_POSITION,
     DEFAULT_PUSH_END_POSITION,
@@ -21,7 +21,12 @@ class OfficialAlohaModelError(FileNotFoundError):
     """Raised when the official ALOHA MuJoCo model submodule is unavailable."""
 
 
-def build_scene_xml(task: TaskSpec) -> str:
+def build_scene_xml(
+    task: TaskSpec,
+    *,
+    extra_objects: tuple[SceneObjectSpec, ...] = (),
+    trace_segments: tuple[TraceSegmentSpec, ...] = (),
+) -> str:
     """Build a task scene by loading the official MuJoCo Menagerie ALOHA MJCF."""
 
     aloha_dir = official_aloha_model_dir()
@@ -29,7 +34,7 @@ def build_scene_xml(task: TaskSpec) -> str:
     root.set("model", task.scene_name)
 
     _append_task_assets(root)
-    _append_task_worldbody(root, task)
+    _append_task_worldbody(root, task, extra_objects=extra_objects, trace_segments=trace_segments)
     _append_task_comments(root, task, aloha_dir)
 
     ElementTree.indent(root, space="  ")
@@ -122,7 +127,13 @@ def _ensure_material(asset: ElementTree.Element, name: str, rgba: str) -> None:
     ElementTree.SubElement(asset, "material", {"name": name, "rgba": rgba})
 
 
-def _append_task_worldbody(root: ElementTree.Element, task: TaskSpec) -> None:
+def _append_task_worldbody(
+    root: ElementTree.Element,
+    task: TaskSpec,
+    *,
+    extra_objects: tuple[SceneObjectSpec, ...],
+    trace_segments: tuple[TraceSegmentSpec, ...],
+) -> None:
     worldbody = ElementTree.Element("worldbody")
 
     target_pos = target_pad_position(task.hand)
@@ -200,6 +211,24 @@ def _append_task_worldbody(root: ElementTree.Element, task: TaskSpec) -> None:
         },
     )
 
+    for scene_object in extra_objects:
+        _append_extra_object(worldbody, scene_object)
+
+    for segment in trace_segments:
+        ElementTree.SubElement(
+            worldbody,
+            "geom",
+            {
+                "name": segment.name,
+                "type": "capsule",
+                "fromto": f"{_vec(segment.from_pos)} {_vec(segment.to_pos)}",
+                "size": f"{segment.radius:.4g}",
+                "rgba": _rgba(segment.rgba),
+                "contype": "0",
+                "conaffinity": "0",
+            },
+        )
+
     root.append(worldbody)
 
 
@@ -224,6 +253,68 @@ def _object_geom_attributes(object_name: str) -> dict[str, str]:
         "type": "box",
         "size": "0.035 0.035 0.035",
     }
+
+
+def _append_extra_object(worldbody: ElementTree.Element, scene_object: SceneObjectSpec) -> None:
+    if scene_object.kind == "paper":
+        ElementTree.SubElement(
+            worldbody,
+            "geom",
+            {
+                "name": scene_object.name,
+                "type": "box",
+                "pos": _vec(scene_object.position),
+                "size": _size(scene_object.size),
+                "rgba": _rgba(scene_object.rgba),
+                "contype": "0",
+                "conaffinity": "0",
+            },
+        )
+        return
+
+    body = ElementTree.SubElement(worldbody, "body", {"name": scene_object.name, "pos": _vec(scene_object.position)})
+    if not scene_object.fixed:
+        ElementTree.SubElement(body, "freejoint", {"name": f"{scene_object.name}_free"})
+
+    ElementTree.SubElement(
+        body,
+        "geom",
+        {
+            "name": f"{scene_object.name}_geom",
+            "type": _geom_type(scene_object.kind),
+            "size": _size(scene_object.size),
+            "rgba": _rgba(scene_object.rgba),
+            "mass": "0.05",
+        },
+    )
+    ElementTree.SubElement(
+        body,
+        "site",
+        {
+            "name": f"{scene_object.name}_site",
+            "pos": "0 0 0",
+            "size": "0.01",
+            "rgba": "1 1 1 1",
+        },
+    )
+
+
+def _geom_type(kind: str) -> str:
+    if kind == "sphere":
+        return "sphere"
+    if kind == "cylinder":
+        return "cylinder"
+    if kind == "marker":
+        return "sphere"
+    return "box"
+
+
+def _size(values: tuple[float, ...]) -> str:
+    return " ".join(f"{value:.4g}" for value in values)
+
+
+def _rgba(values: tuple[float, float, float, float]) -> str:
+    return " ".join(f"{value:.4g}" for value in values)
 
 
 def _vec(values: tuple[float, float, float]) -> str:

@@ -141,13 +141,15 @@ class AlohaMujocoController:
         attached: bool = False,
         move_cube_to: np.ndarray | None = None,
     ) -> None:
+        start_gripper = self._site_position(ALOHA_SPEC.arm(hand).gripper_site)
         start_cube = self._cube_position()
         for index in range(steps):
-            self._solve_ik(hand, target)
+            alpha = (index + 1) / steps
+            waypoint = start_gripper * (1.0 - alpha) + target * alpha
+            self._solve_ik(hand, waypoint)
             if attached:
                 self._set_cube_position(self._site_position(ALOHA_SPEC.arm(hand).gripper_site) + np.array([0.0, 0.0, -0.045]))
             elif move_cube_to is not None:
-                alpha = (index + 1) / steps
                 self._set_cube_position(start_cube * (1.0 - alpha) + move_cube_to * alpha)
             self.data.qvel[:] = 0
             self.mujoco.mj_forward(self.model, self.data)

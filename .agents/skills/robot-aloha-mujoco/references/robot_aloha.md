@@ -35,7 +35,34 @@ The host installer uploads `external/mujoco_menagerie/aloha/` into the sandbox r
 
 ## Runtime Commands
 
-Preferred OpenClaw tool call:
+Preferred live-viewer tool call when the user asks to watch in real time:
+
+```json
+{
+  "tool": "aloha_mujoco_live",
+  "arguments": {
+    "prompt": "リアルタイムで右アームを右に10cm動かしてください",
+    "mode": "control"
+  }
+}
+```
+
+Use `mode: "control"` for live relative movement, gripper, object creation, paper placement, or drawing-style prompts. Use `mode: "auto"` or omit `mode` for live fixed grasp/place/push demos.
+
+Preferred non-live OpenClaw control call:
+
+```json
+{
+  "tool": "aloha_prompt_control",
+  "arguments": {
+    "prompt": "右アームを右に10cm動かしてください"
+  }
+}
+```
+
+Use `aloha_prompt_control` for non-live natural movement, gripper, object creation, paper placement, or drawing-style prompts. It creates a persistent session, converts the prompt into conservative primitives, executes them, and returns the final session state.
+
+Fixed grasp/place/push artifact run:
 
 ```json
 {
@@ -48,18 +75,48 @@ Preferred OpenClaw tool call:
 }
 ```
 
-Preferred live-viewer tool call when the user asks to watch in real time:
+Preferred planning-control tool flow when the user asks for relative movement, asset creation, drawing, or task decomposition:
 
 ```json
 {
-  "tool": "aloha_mujoco_live",
+  "tool": "aloha_session_start",
   "arguments": {
-    "prompt": "リアルタイムでAlohaのアームロボットが球体を掴むところを見たい"
+    "prompt": "Alohaの右アームを右に10cm動かしてください"
   }
 }
 ```
 
-If the agent only exposes `tool_search_code`, use:
+Then use the returned `session_id` with:
+
+- `aloha_get_state`: inspect robot qpos, gripper pose, object pose, and contacts.
+- `aloha_solve_ik`: solve position IK for a target gripper position.
+- `aloha_move_relative`: move a gripper by dx/dy/dz or semantic direction. ALOHA frame is x forward, y left, z up; right is negative y.
+- `aloha_move_to_pose`: move a gripper to a target world-frame position.
+- `aloha_execute_cartesian_path`: execute multiple gripper waypoints, useful for drawing-style demos.
+- `aloha_set_gripper`: open or close gripper.
+- `aloha_add_object`: add cube, sphere, cylinder, paper, or marker primitives to the session scene.
+- `aloha_add_trace`: add non-colliding visual trace segments for drawing/path visualization.
+- `aloha_check_pose`: verify final gripper pose.
+- `aloha_check_contacts`: inspect MuJoCo contacts.
+
+If the agent only exposes `tool_search_code` and the user asks for live/realtime/viewer, use:
+
+```javascript
+return await openclaw.tools.call("aloha_mujoco_live", {
+  prompt: "リアルタイムで右アームを右に10cm動かしてください",
+  mode: "control"
+});
+```
+
+For a non-live natural control request through `tool_search_code`, use:
+
+```javascript
+return await openclaw.tools.call("aloha_prompt_control", {
+  prompt: "右アームを右に10cm動かしてください"
+});
+```
+
+For a fixed artifact run through `tool_search_code`, use:
 
 ```javascript
 return await openclaw.tools.call("aloha_mujoco_run", {
@@ -77,7 +134,16 @@ return await openclaw.tools.call("aloha_mujoco_live", {
 });
 ```
 
-Do not use `openclaw.tools.readSkill`, `openclaw.tools.runSkill`, or `openclaw.skills.spawn`; those APIs are not available in the OpenClaw compact tool bridge.
+For a live relative/control request, force prompt-control playback:
+
+```javascript
+return await openclaw.tools.call("aloha_mujoco_live", {
+  prompt: "リアルタイムで右アームを右に10cm動かしてください",
+  mode: "control"
+});
+```
+
+Do not use `openclaw.tools.readSkill`, `openclaw.tools.runSkill`, `openclaw.skills.spawn`, or bare calls like `aloha_session_start()`; those APIs are not available in the OpenClaw compact tool bridge. Use `openclaw.tools.call("tool_name", args)`.
 
 Build plan only:
 
@@ -146,5 +212,6 @@ Each run directory contains:
 - Never modify the `external/mujoco_menagerie/` submodule.
 - Do not claim physical robot execution; this skill targets simulation.
 - Treat the current controller as a scripted MuJoCo scaffold, not a learned manipulation policy.
-- The first controller opens and closes the official ALOHA gripper joints, but cube lift/transfer still uses a scripted attachment after the close phase rather than a fully learned or contact-only grasp policy.
+- The first controller opens and closes the official ALOHA gripper joints, but object movement after the close phase uses scripted attachment/playback rather than a verified successful contact-only grasp.
+- The session tools expose IK, state, movement, object, trace, and validation scaffolding so the Agent can plan multi-step actions. They still do not guarantee robust grasp success.
 - When MuJoCo is missing, produce plan and scene artifacts and state that simulation was not executed.

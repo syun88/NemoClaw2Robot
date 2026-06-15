@@ -10,7 +10,19 @@
     "tools": [
       "aloha_mujoco_plan",
       "aloha_mujoco_run",
-      "aloha_mujoco_live"
+      "aloha_mujoco_live",
+      "aloha_prompt_control",
+      "aloha_session_start",
+      "aloha_get_state",
+      "aloha_solve_ik",
+      "aloha_move_relative",
+      "aloha_move_to_pose",
+      "aloha_execute_cartesian_path",
+      "aloha_set_gripper",
+      "aloha_add_object",
+      "aloha_add_trace",
+      "aloha_check_pose",
+      "aloha_check_contacts"
     ]
   },
   "configSchema": {

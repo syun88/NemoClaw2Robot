@@ -36,9 +36,24 @@ flowchart LR
     A --> L["aloha_mujoco_live tool"]
     L --> Q["Sandbox request queue<br/>artifacts/live_requests/*.json"]
     Q --> W["Host live-agent watcher<br/>openshell sandbox exec"]
-    W --> V["Native MuJoCo viewer on macOS"]
+    W --> D{"fixed demo<br/>or prompt-control?"}
+    D --> V["Native MuJoCo viewer on macOS"]
     V --> R["ALOHA robot motion"]
 ```
+
+Multi-step planning flow:
+
+```mermaid
+flowchart LR
+    U["Broad user prompt"] --> A["OpenClaw agent"]
+    A --> H["aloha_prompt_control"]
+    H --> P["Prompt-to-primitive planner"]
+    P --> S["session_start / add_object / move / gripper / trace"]
+    S --> E["Session qpos and scene saved"]
+    E --> C["final state and scene_path returned"]
+```
+
+The high-level `aloha_prompt_control` tool handles common natural-language control prompts in one OpenClaw call. The lower-level planning tools persist state under `artifacts/sessions/<session_id>/`, so individual OpenClaw tool calls can still build on the same scene and robot qpos when manual decomposition or debugging is needed.
 
 ## First Supported Robot
 

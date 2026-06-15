@@ -5,6 +5,7 @@ from typing import Literal
 
 ActionName = Literal["grasp", "place", "push", "inspect"]
 ArmName = Literal["left", "right", "auto"]
+SceneObjectKind = Literal["cube", "sphere", "cylinder", "paper", "marker"]
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,35 @@ class RobotSpec:
 
 
 @dataclass(frozen=True)
+class SceneObjectSpec:
+    """A simple project-side object appended to the generated MuJoCo scene."""
+
+    name: str
+    kind: SceneObjectKind
+    position: tuple[float, float, float]
+    size: tuple[float, ...]
+    rgba: tuple[float, float, float, float] = (0.8, 0.2, 0.1, 1.0)
+    fixed: bool = False
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class TraceSegmentSpec:
+    """A non-colliding visual segment for drawing/path traces."""
+
+    name: str
+    from_pos: tuple[float, float, float]
+    to_pos: tuple[float, float, float]
+    radius: float = 0.004
+    rgba: tuple[float, float, float, float] = (0.05, 0.05, 0.05, 1.0)
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class RunArtifact:
     path: str
     kind: str
@@ -64,4 +94,3 @@ class RunResult:
         result = asdict(self)
         result["task"] = self.task.to_dict()
         return result
-
